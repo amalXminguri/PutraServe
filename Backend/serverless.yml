@@ -1,0 +1,68 @@
+service: putraserve-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-southeast-1
+  environment:
+    T_BOOKINGS: PutraServeBookings
+    T_FEEDBACK: PutraServeFeedback
+    T_TICKETS: PutraServeTickets
+    T_FACILITIES: PutraServeFacilities
+
+functions:
+  createBooking:
+    handler: src/handlers/bookings.createBooking
+    events:
+      - http:
+          path: bookings
+          method: post
+
+  listBookings:
+    handler: src/handlers/bookings.listBookings
+    events:
+      - http:
+          path: bookings
+          method: get
+
+  createFeedback:
+    handler: src/handlers/feedback.createFeedback
+    events:
+      - http:
+          path: feedback
+          method: post
+
+  listVenues:
+    handler: src/handlers/facilities.listVenues
+    events:
+      - http:
+          path: venues
+          method: get
+
+  getFacility:
+    handler: src/handlers/facilities.getFacility
+    events:
+      - http:
+          path: facilities/{id}
+          method: get
+
+  listTickets:
+    handler: src/handlers/admin.listTickets
+    events:
+      - http:
+          path: admin/tickets
+          method: get
+
+  updateTicketStatus:
+    handler: src/handlers/admin.updateTicketStatus
+    events:
+      - http:
+          path: admin/tickets/{id}
+          method: patch
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    disableCookieValidation: true

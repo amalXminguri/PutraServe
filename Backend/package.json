@@ -1,0 +1,18 @@
+{
+  "name": "putraserve-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "serverless offline",
+    "deploy": "serverless deploy"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^4.29.4",
+    "serverless-offline": "^14.4.0"
+  }
+}
