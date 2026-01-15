@@ -416,7 +416,11 @@ const facilitiesApi = {
 
 const bookingsApi = {
   async create(payload) {
-    if (API_BASE) return apiFetch(`/bookings`, { method: "POST", body: JSON.stringify(payload) });
+    if (API_BASE) {
+      const b = await apiFetch(`/bookings`, { method: "POST", body: JSON.stringify(payload) });
+      // normalize
+      return { ...b, id: b.bookingId ?? b.id };
+    }
 
     // demo localStorage
     const existing = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
@@ -431,23 +435,36 @@ const bookingsApi = {
   },
 
   async getAll(userId) {
-    if (API_BASE) return apiFetch(`/bookings?userId=${encodeURIComponent(userId)}`);
+    if (API_BASE) {
+      const items = await apiFetch(`/bookings?userId=${encodeURIComponent(userId)}`);
+      return (items || []).map((b) => ({
+        ...b,
+        id: b.bookingId ?? b.id, // normalize
+        facility: b.facility || findFacilityForBooking(b),
+      }));
+    }
 
     const all = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
-    return all.filter((b) => b.userId === userId).map((b) => ({
-      ...b,
-      facility: findFacilityForBooking(b),
-    }));
+    return all
+      .filter((b) => b.userId === userId)
+      .map((b) => ({
+        ...b,
+        facility: findFacilityForBooking(b),
+      }));
   },
 
   async getById(bookingId) {
-    if (API_BASE) return apiFetch(`/bookings/${bookingId}`);
+    if (API_BASE) {
+      const b = await apiFetch(`/bookings/${bookingId}`);
+      return { ...b, id: b.bookingId ?? b.id }; // normalize
+    }
 
     const all = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
     const b = all.find((x) => x.id === bookingId);
     return b ? { ...b, facility: findFacilityForBooking(b) } : null;
   },
 };
+
 
 const feedbackApi = {
   async create(payload) {
@@ -888,7 +905,7 @@ function FacilityDetails() {
   const [slots, setSlots] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [selectedSlotId, setSelectedSlotId] = useState(null);
+  const [selectedSlotKey, setSelectedSlotKey] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -908,14 +925,16 @@ function FacilityDetails() {
   }, [id]);
 
   useEffect(() => {
-    (async () => {
-      const s = await facilitiesApi.getTimeSlots(id, selectedDate);
-      setSlots(Array.isArray(s) ? s : []);
-      setSelectedSlotId(null);
-    })();
-  }, [id, selectedDate]);
+  (async () => {
+    const s = await facilitiesApi.getTimeSlots(id, selectedDate);
+    setSlots(Array.isArray(s) ? s : []);
+    setSelectedSlotKey(null);
+  })();
+}, [id, selectedDate]);
 
-  const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+
+  const selectedSlot = slots.find((s) => (s.id ?? s.time) === selectedSlotKey);
+
 
   const bookNow = () => {
     if (!facility || !selectedSlot) return;
@@ -1050,24 +1069,32 @@ function FacilityDetails() {
               <div>
                 <label className="text-sm font-medium mb-2 block">Available Slots</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {slots.map((s) => (
+                  {slots.map((s) => {
+                    const key = s.id ?? s.time;
+                    const isSelected = selectedSlotKey === key;
+                    const disabled = s.available === false;
+
+                    return (
                     <button
-                      key={s.id}
+                      key={key}
                       type="button"
-                      onClick={() => setSelectedSlotId(s.id)}
+                      disabled={disabled}
+                      onClick={() => setSelectedSlotKey(key)}
                       className={cn(
                         "p-3 rounded-xl border text-sm transition text-left",
-                        selectedSlotId === s.id
-                          ? "border-primary bg-primary/5"
+                        disabled && "opacity-50 cursor-not-allowed",
+                        isSelected
+                          ? "border-primary bg-primary/10 ring-2 ring-primary/20"
                           : "border-border hover:border-primary/50"
-                      )}
+                    )}
                     >
                       <div className="font-medium">{s.time}</div>
                       <div className="text-xs text-muted-foreground">
                         {s.available ? "Available" : "Full"}
                       </div>
                     </button>
-                  ))}
+                  );
+                })}
                 </div>
               </div>
 
@@ -1278,7 +1305,26 @@ function Bookings() {
     (async () => {
       setLoading(true);
       const data = await bookingsApi.getAll("user-1");
-      setBookings(Array.isArray(data) ? data : []);
+
+      const now = new Date();
+
+      const updated = (Array.isArray(data) ? data : []).map((b) => {
+      // b.timeSlot example: "12:00 - 13:00"
+        const end = (b.timeSlot || "").split(" - ")[1]; // "13:00"
+        if (!b.date || !end) return b;
+
+        // Create a Date object for booking end time
+        const endDateTime = new Date(`${b.date}T${end}:00`);
+
+        // If already past, mark as completed
+        if (endDateTime < now && b.status === "upcoming") {
+          return { ...b, status: "completed" };
+        }
+
+        return b;
+    });
+
+setBookings(updated);
       setLoading(false);
     })();
   }, []);
@@ -1333,7 +1379,7 @@ function Bookings() {
 function BookingCard({ booking }) {
   const facilityName = booking?.facility?.name || "Facility";
   const venueName = booking?.facility?.venueName || "UPM";
-  const canGiveFeedback = booking.status === "completed";
+  const canGiveFeedback = booking.status === "completed" || booking.status === "upcoming";
 
   return (
     <Card className="p-5">
@@ -1386,13 +1432,28 @@ function FeedbackForm() {
   const [photoPreview, setPhotoPreview] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+  (async () => {
+    setLoading(true);
+    try {
       const b = await bookingsApi.getById(bookingId);
       setBooking(b);
+    } catch (err) {
+      console.warn("getById failed, fallback booking:", err);
+
+      // fallback so feedback page still works
+      setBooking({
+        id: bookingId,
+        bookingId,
+        status: "upcoming", // or "completed" for demo
+        facility: { name: "Facility" },
+      });
+    } finally {
       setLoading(false);
-    })();
-  }, [bookingId]);
+    }
+  })();
+}, [bookingId]);
+
+
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
@@ -1456,18 +1517,22 @@ function FeedbackForm() {
   }
 
   // (same logic as your original: feedback after completed) :contentReference[oaicite:10]{index=10}
-  if (booking.status !== "completed") {
-    return (
-      <Layout>
-        <EmptyState
-          title="Feedback Not Available"
-          description={`You can submit feedback after your session is completed. Current status: ${booking.status}`}
-          icon={<Info className="h-6 w-6 text-info" />}
-          action={<Link to="/bookings"><Button>View My Bookings</Button></Link>}
-        />
-      </Layout>
-    );
-  }
+  const canSubmitFeedback =
+  booking.status === "completed" || booking.status === "upcoming";
+
+if (!canSubmitFeedback) {
+  return (
+    <Layout>
+      <EmptyState
+        title="Feedback Not Available"
+        description={`Current status: ${booking.status}`}
+        icon={<Info className="h-6 w-6 text-muted-foreground" />}
+        action={<Link to="/bookings"><Button>View My Bookings</Button></Link>}
+      />
+    </Layout>
+  );
+}
+
 
   return (
     <Layout showFooter={false}>

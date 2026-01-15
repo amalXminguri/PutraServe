@@ -4,6 +4,11 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: ap-southeast-1
+
+  # ✅ ADDED (recommended)
+  httpApi:
+    cors: true
+
   environment:
     T_BOOKINGS: PutraServeBookings
     T_FEEDBACK: PutraServeFeedback
@@ -25,6 +30,28 @@ functions:
           path: bookings
           method: get
 
+  # ✅ ADDED (needed because your frontend calls GET /bookings/{id})
+  getBooking:
+    handler: src/handlers/bookings.getBooking
+    events:
+      - http:
+          path: bookings/{id}
+          method: get
+
+  # ✅ ADDED (manual status update endpoint)
+  updateBookingStatus:
+    handler: src/handlers/bookings.updateBookingStatus
+    events:
+      - http:
+          path: bookings/{id}/status
+          method: put
+
+  # ✅ ADDED (cron job to auto-complete bookings)
+  autoCompleteBookings:
+    handler: src/handlers/bookings.autoCompleteBookings
+    events:
+      - schedule: rate(5 minutes)
+
   createFeedback:
     handler: src/handlers/feedback.createFeedback
     events:
@@ -44,6 +71,20 @@ functions:
     events:
       - http:
           path: facilities/{id}
+          method: get
+
+  listFacilityFeedback:
+    handler: src/handlers/facilities.listFacilityFeedback
+    events:
+      - http:
+          path: facilities/{id}/feedback
+          method: get
+
+  getTimeSlots:
+    handler: src/handlers/facilities.getTimeSlots
+    events:
+      - http:
+          path: facilities/{id}/timeslots
           method: get
 
   listTickets:
