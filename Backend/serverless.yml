@@ -5,10 +5,6 @@ provider:
   runtime: nodejs18.x
   region: ap-southeast-1
 
-  # ✅ ADDED (recommended)
-  httpApi:
-    cors: true
-
   environment:
     T_BOOKINGS: PutraServeBookings
     T_FEEDBACK: PutraServeFeedback
@@ -22,6 +18,7 @@ functions:
       - http:
           path: bookings
           method: post
+          cors: true
 
   listBookings:
     handler: src/handlers/bookings.listBookings
@@ -29,24 +26,24 @@ functions:
       - http:
           path: bookings
           method: get
+          cors: true
 
-  # ✅ ADDED (needed because your frontend calls GET /bookings/{id})
   getBooking:
     handler: src/handlers/bookings.getBooking
     events:
       - http:
           path: bookings/{id}
           method: get
+          cors: true
 
-  # ✅ ADDED (manual status update endpoint)
   updateBookingStatus:
     handler: src/handlers/bookings.updateBookingStatus
     events:
       - http:
           path: bookings/{id}/status
           method: put
+          cors: true
 
-  # ✅ ADDED (cron job to auto-complete bookings)
   autoCompleteBookings:
     handler: src/handlers/bookings.autoCompleteBookings
     events:
@@ -58,6 +55,7 @@ functions:
       - http:
           path: feedback
           method: post
+          cors: true
 
   listVenues:
     handler: src/handlers/facilities.listVenues
@@ -65,6 +63,7 @@ functions:
       - http:
           path: venues
           method: get
+          cors: true
 
   getFacility:
     handler: src/handlers/facilities.getFacility
@@ -72,6 +71,7 @@ functions:
       - http:
           path: facilities/{id}
           method: get
+          cors: true
 
   listFacilityFeedback:
     handler: src/handlers/facilities.listFacilityFeedback
@@ -79,6 +79,7 @@ functions:
       - http:
           path: facilities/{id}/feedback
           method: get
+          cors: true
 
   getTimeSlots:
     handler: src/handlers/facilities.getTimeSlots
@@ -86,6 +87,7 @@ functions:
       - http:
           path: facilities/{id}/timeslots
           method: get
+          cors: true
 
   listTickets:
     handler: src/handlers/admin.listTickets
@@ -93,6 +95,7 @@ functions:
       - http:
           path: admin/tickets
           method: get
+          cors: true
 
   updateTicketStatus:
     handler: src/handlers/admin.updateTicketStatus
@@ -100,6 +103,7 @@ functions:
       - http:
           path: admin/tickets/{id}
           method: patch
+          cors: true
 
 plugins:
   - serverless-offline

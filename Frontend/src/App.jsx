@@ -348,17 +348,30 @@ const DEMO_VENUES = [
  * API wrapper (works with backend or demo fallback)
  * =========================
  */
-async function apiFetch(path, opts) {
-  if (!API_BASE) {
-  throw new Error("VITE_API_BASE is not set. Backend NOT connected.");
+async function apiFetch(path, opts = {}) {
+  if (!API_BASE) throw new Error("VITE_API_BASE is not set. Backend NOT connected.");
+
+  const method = (opts.method || "GET").toUpperCase();
+
+  const headers = {
+    ...(opts.headers || {}),
+  };
+
+  // Only attach JSON content-type when sending a body
+  if (method !== "GET" && method !== "HEAD") {
+    headers["Content-Type"] = "application/json";
   }
+
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...opts,
+    method,
+    headers,
   });
+
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
+
 
 const facilitiesApi = {
   async getVenues({ search = "", category = "all" } = {}) {
