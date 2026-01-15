@@ -30,7 +30,28 @@ import {
   Check,
   Info,
 } from "lucide-react";
+import {
+  signUp,
+  confirmSignUp,
+  signIn,
+  signOut,
+  getCurrentUser,
+  fetchUserAttributes,
+} from "aws-amplify/auth";
 
+async function getAuthUser() {
+  try {
+    const user = await getCurrentUser();
+    const attrs = await fetchUserAttributes();
+    return {
+      username: user.username,
+      sub: attrs.sub,
+      email: attrs.email,
+    };
+  } catch {
+    return null;
+  }
+}
 /**
  * =========================
  * Config
@@ -345,7 +366,7 @@ const DEMO_VENUES = [
 
 /**
  * =========================
- * API wrapper (works with backend or demo fallback)
+ * API wrapper 
  * =========================
  */
 async function apiFetch(path, opts = {}) {
@@ -1166,23 +1187,28 @@ function Checkout() {
   const canSubmit = fullName.trim() && email.trim() && emailValid && facility && date && slot;
 
   const confirm = async (e) => {
-    e.preventDefault();
-    setEmailTouched(true);
-    if (!canSubmit) return;
+  e.preventDefault();
+  setEmailTouched(true);
+  if (!canSubmit) return;
 
-    await bookingsApi.create({
-      userId: "user-1",
-      facilityId,
-      date,
-      timeSlot: slot,
-      userName: fullName.trim(),
-      userEmail: email.trim(),
-      userMatricId: matric.trim(),
-      totalPrice: total,
-    });
+  // ✅ get logged-in user from Cognito
+  const authUser = await getAuthUser();
+  const userId = authUser?.sub || "user-1";
+  const userEmail = authUser?.email || email.trim() || "unknown@email.com";
 
-    navigate("/bookings");
-  };
+  await bookingsApi.create({
+    userId,
+    facilityId,
+    date,
+    timeSlot: slot,
+    userName: fullName.trim() || userEmail,
+    userEmail: userEmail,
+    userMatricId: matric.trim(),
+    totalPrice: total,
+  });
+
+  navigate("/bookings");
+};
 
   if (!facilityId || !date || !slot) {
     return (
@@ -1315,26 +1341,21 @@ function Bookings() {
   const [tab, setTab] = useState("upcoming");
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const data = await bookingsApi.getAll("user-1");
+  (async () => {
+    setLoading(true);
 
-      const now = new Date();
+    const authUser = await getAuthUser();
+    const userId = authUser?.sub || "user-1";
 
-      const updated = (Array.isArray(data) ? data : []).map((b) => {
-      // b.timeSlot example: "12:00 - 13:00"
-        const end = (b.timeSlot || "").split(" - ")[1]; // "13:00"
-        if (!b.date || !end) return b;
+    const data = await bookingsApi.getAll(userId);
 
-        // Create a Date object for booking end time
-        const endDateTime = new Date(`${b.date}T${end}:00`);
-
-        // If already past, mark as completed
-        if (endDateTime < now && b.status === "upcoming") {
-          return { ...b, status: "completed" };
-        }
-
-        return b;
+    const now = new Date();
+    const updated = (Array.isArray(data) ? data : []).map((b) => {
+      const end = (b.timeSlot || "").split(" - ")[1];
+      if (!b.date || !end) return b;
+      const endDateTime = new Date(`${b.date}T${end}:00`);
+      if (endDateTime < now && b.status === "upcoming") return { ...b, status: "completed" };
+      return b;
     });
 
 setBookings(updated);
