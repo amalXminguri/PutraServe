@@ -43,15 +43,12 @@ async function getAuthUser() {
   try {
     const user = await getCurrentUser();
     const attrs = await fetchUserAttributes();
-    return {
-      username: user.username,
-      sub: attrs.sub,
-      email: attrs.email,
-    };
+    return { username: user.username, sub: attrs.sub, email: attrs.email };
   } catch {
     return null;
   }
 }
+
 
 
 /**
@@ -221,7 +218,7 @@ function RatingStars({ rating = 0, onChange, interactive = false, size = "md" })
  * Layout (single-file)
  * =========================
  */
-function Layout({ children, showFooter = true }) {
+function Layout({ children, showFooter = true, authUser, onLogout }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* top nav */}
@@ -247,12 +244,23 @@ function Layout({ children, showFooter = true }) {
                 Admin
               </Button>
             </Link>
-            <Link to="/login">
-              <Button size="sm">
+            {authUser ? (
+              <>
+                <span className="text-sm text-muted-foreground hidden sm:inline">
+                  {authUser.email}
+                </span>
+                <Button size="sm" variant="outline" onClick={onLogout}>
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Link to="/login">
+               <Button size="sm">
                 <Mail className="h-4 w-4" />
                 Login
               </Button>
             </Link>
+            )}
           </div>
         </div>
       </div>
@@ -542,7 +550,7 @@ function findFacilityForBooking(b) {
  * Pages
  * =========================
  */
-function Home() {
+function Home({ authUser, onLogout }) {
   const navigate = useNavigate();
   const [featured, setFeatured] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -562,7 +570,7 @@ function Home() {
   };
 
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       {/* hero (same vibe as your Index.jsx) */}
       <section className="relative min-h-[85vh] flex items-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-primary/10" />
@@ -731,7 +739,7 @@ function FacilityCard({ facility }) {
   );
 }
 
-function Facilities() {
+function Facilities({ authUser, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -792,7 +800,7 @@ function Facilities() {
   const hasActiveFilters = Boolean(searchQuery) || category !== "all";
 
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Explore Facilities</h1>
@@ -934,7 +942,7 @@ function VenueBlock({ venue }) {
   );
 }
 
-function FacilityDetails() {
+function FacilityDetails({ authUser, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [facility, setFacility] = useState(null);
@@ -984,7 +992,7 @@ function FacilityDetails() {
 
   if (loading) {
     return (
-      <Layout>
+      <Layout authUser={authUser} onLogout={onLogout}>
         <div className="container mx-auto px-4 py-10">
           <div className="h-8 w-52 bg-muted rounded mb-6 animate-pulse" />
           <div className="h-72 bg-muted rounded-2xl animate-pulse" />
@@ -995,7 +1003,7 @@ function FacilityDetails() {
 
   if (!facility) {
     return (
-      <Layout>
+      <Layout authUser={authUser} onLogout={onLogout}>
         <EmptyState
           title="Facility Not Found"
           description="The facility you’re looking for doesn’t exist."
@@ -1007,7 +1015,7 @@ function FacilityDetails() {
   }
 
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-6">
         <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate(-1)}>
           <ChevronLeft className="h-4 w-4" /> Back
@@ -1162,7 +1170,7 @@ function FacilityDetails() {
   );
 }
 
-function Checkout() {
+function Checkout({ authUser, onLogout }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
@@ -1214,7 +1222,7 @@ function Checkout() {
 
   if (!facilityId || !date || !slot) {
     return (
-      <Layout>
+      <Layout authUser={authUser} onLogout={onLogout}>
         <EmptyState
           title="Missing booking info"
           description="Please choose a facility, date and time slot first."
@@ -1226,7 +1234,7 @@ function Checkout() {
   }
 
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-10">
         <Button variant="ghost" className="mb-6 -ml-2" onClick={() => navigate(-1)}>
           ← Back
@@ -1337,7 +1345,7 @@ function Checkout() {
   );
 }
 
-function Bookings() {
+function Bookings({ authUser, onLogout }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("upcoming");
@@ -1369,7 +1377,7 @@ setBookings(updated);
   const past = bookings.filter((b) => b.status === "completed" || b.status === "cancelled");
 
   return (
-    <Layout showFooter={false}>
+    <Layout showFooter={false} authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         <h1 className="text-3xl font-bold mb-6">My Bookings</h1>
 
@@ -1449,7 +1457,7 @@ function BookingCard({ booking }) {
   );
 }
 
-function FeedbackForm() {
+function FeedbackForm({ authUser, onLogout }) {
   const { bookingId } = useParams();
   const navigate = useNavigate();
 
@@ -1530,7 +1538,7 @@ function FeedbackForm() {
 
   if (loading) {
     return (
-      <Layout>
+      <Layout authUser={authUser} onLogout={onLogout}>
         <div className="container mx-auto px-4 py-10">
           <div className="h-8 w-52 bg-muted rounded mb-6 animate-pulse" />
           <div className="h-72 bg-muted rounded-2xl animate-pulse" />
@@ -1541,7 +1549,7 @@ function FeedbackForm() {
 
   if (!booking) {
     return (
-      <Layout>
+      <Layout authUser={authUser} onLogout={onLogout}>
         <EmptyState
           title="Booking Not Found"
           description="We couldn’t find this booking."
@@ -1558,7 +1566,7 @@ function FeedbackForm() {
 
 if (!canSubmitFeedback) {
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       <EmptyState
         title="Feedback Not Available"
         description={`Current status: ${booking.status}`}
@@ -1571,7 +1579,7 @@ if (!canSubmitFeedback) {
 
 
   return (
-    <Layout showFooter={false}>
+    <Layout showFooter={false} authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-6">
         <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate(-1)}>
           <ChevronLeft className="h-4 w-4" /> Back
@@ -1727,7 +1735,7 @@ if (!canSubmitFeedback) {
   );
 }
 
-function Admin() {
+function Admin({ authUser, onLogout }) {
   // demo: pull tickets from localStorage (backend version will call /admin/reports)
   const [tickets, setTickets] = useState(() => JSON.parse(localStorage.getItem("ps_tickets") || "[]"));
   const [selectedId, setSelectedId] = useState(null);
@@ -1764,7 +1772,7 @@ function Admin() {
   };
 
   return (
-    <Layout showFooter={false}>
+    <Layout showFooter={false} authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-2xl md:text-3xl font-bold mb-2">Admin Dashboard</h1>
@@ -1959,11 +1967,14 @@ function StatCard({ icon: Icon, label, value }) {
   );
 }
 
-function Login() {
+function Login({ onAuthed, authUser, onLogout }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState("login");
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [signupForm, setSignupForm] = useState({ email: "", password: "", confirmPassword: "" });
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [confirmCode, setConfirmCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -2001,9 +2012,10 @@ function Login() {
       password: loginForm.password,
     });
 
+    await onAuthed?.(); // refresh authUser in App
     navigate("/facilities");
   } catch (err) {
-    alert(err.message || "Login failed");
+    alert(err?.message || "Login failed");
   }
 };
 
@@ -2016,18 +2028,38 @@ function Login() {
     await signUp({
       username: signupForm.email,
       password: signupForm.password,
+      options: {
+        userAttributes: { email: signupForm.email },
+      },
     });
 
-    alert("Signup successful! Please login.");
+    setPendingEmail(signupForm.email);
+    setNeedsConfirm(true); // show code input
+  } catch (err) {
+    alert(err?.message || "Sign up failed");
+  }
+};
+
+const onConfirmSignup = async (e) => {
+  e.preventDefault();
+  try {
+    await confirmSignUp({
+      username: pendingEmail,
+      confirmationCode: confirmCode.trim(),
+    });
+
+    // after confirm, go login
+    setNeedsConfirm(false);
     setTab("login");
   } catch (err) {
-    alert(err.message || "Signup failed");
+    alert(err?.message || "Confirmation failed");
   }
 };
 
 
+
   return (
-    <Layout showFooter={false}>
+  <Layout showFooter={false} authUser={authUser} onLogout={onLogout}>
       <div className="container mx-auto px-4 py-10">
         <div className="max-w-xl mx-auto text-center mb-8">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
@@ -2053,95 +2085,181 @@ function Login() {
             </button>
           </div>
 
-          {tab === "login" ? (
-            <form onSubmit={onLogin} className="space-y-5">
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <div className={cn("mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12", loginErrors.email && "border-destructive")}>
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <Input
-                    type="email"
-                    placeholder="your.email@student.upm.edu.my"
-                    className="border-0 px-0 h-10 focus:ring-0"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  />
-                </div>
-                <FieldError msg={loginErrors.email} />
+          {needsConfirm ? (
+            <form onSubmit={onConfirmSignup} className="space-y-5">
+              <div className="text-sm text-muted-foreground">
+                Enter the code sent to <b>{pendingEmail}</b>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Password</label>
-                <div className={cn("mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12", loginErrors.password && "border-destructive")}>
-                  <Lock className="h-5 w-5 text-muted-foreground" />
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    className="border-0 px-0 h-10 focus:ring-0"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  />
-                </div>
-                <FieldError msg={loginErrors.password} />
-              </div>
+             <div>
+              <label className="text-sm font-medium">Verification Code</label>
+              <Input
+                className="mt-2 h-12 rounded-xl"
+                value={confirmCode}
+                onChange={(e) => setConfirmCode(e.target.value)}
+                placeholder="123456"
+                required
+              />
+            </div>
 
-              <Button type="submit" className="w-full h-14 rounded-2xl text-lg" disabled={!canLogin}>
-                Login
-              </Button>
+            <Button type="submit" className="w-full h-14 rounded-2xl text-lg">
+              Confirm Sign Up
+            </Button>
 
-              <p className="text-center text-sm text-muted-foreground">
-                Demo: any email & password is accepted.
-              </p>
-            </form>
-          ) : (
-            <form onSubmit={onSignup} className="space-y-5">
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  type="email"
-                  placeholder="your.email@student.upm.edu.my"
-                  value={signupForm.email}
-                  onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
-                />
-                <FieldError msg={signupErrors.email} />
-              </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 rounded-2xl"
+              onClick={() => {
+                setNeedsConfirm(false);
+                setConfirmCode("");
+                setTab("signup"); // go back if they want
+              }}
+            >
+              Back
+            </Button>
+          </form>
+        ) : tab === "login" ? (
+  <form onSubmit={onLogin} className="space-y-5">
+    <div>
+      <label className="text-sm font-medium">Email</label>
+      <div className={cn(
+        "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+        loginErrors.email && "border-destructive"
+      )}>
+        <Mail className="h-5 w-5 text-muted-foreground" />
+        <input
+          type="email"
+          className="flex-1 bg-transparent outline-none text-sm"
+          placeholder="your.email@student.upm.edu.my"
+          value={loginForm.email}
+          onChange={(e) =>
+            setLoginForm({ ...loginForm, email: e.target.value })
+          }
+        />
+      </div>
+      <FieldError msg={loginErrors.email} />
+    </div>
 
-              <div>
-                <label className="text-sm font-medium">Password</label>
-                <Input
-                  type="password"
-                  placeholder="Minimum 6 characters"
-                  value={signupForm.password}
-                  onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
-                />
-                <FieldError msg={signupErrors.password} />
-              </div>
+    <div>
+      <label className="text-sm font-medium">Password</label>
+      <div className={cn(
+        "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+        loginErrors.password && "border-destructive"
+      )}>
+        <Lock className="h-5 w-5 text-muted-foreground" />
+        <input
+          type="password"
+          className="flex-1 bg-transparent outline-none text-sm"
+          placeholder="••••••••"
+          value={loginForm.password}
+          onChange={(e) =>
+            setLoginForm({ ...loginForm, password: e.target.value })
+          }
+        />
+      </div>
+      <FieldError msg={loginErrors.password} />
+    </div>
 
-              <div>
-                <label className="text-sm font-medium">Confirm Password</label>
-                <Input
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={signupForm.confirmPassword}
-                  onChange={(e) => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
-                />
-                <FieldError msg={signupErrors.confirmPassword} />
-              </div>
+    <Button
+      type="submit"
+      className="w-full h-14 rounded-2xl text-lg"
+      disabled={!canLogin}
+    >
+      Login
+    </Button>
+  </form>
+) : (
+  <form onSubmit={onSignup} className="space-y-5">
+    <div>
+      <label className="text-sm font-medium">Email</label>
+      <div
+        className={cn(
+          "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+          signupErrors.email && "border-destructive"
+        )}
+      >
+        <Mail className="h-5 w-5 text-muted-foreground" />
+        <input
+          type="email"
+          className="flex-1 bg-transparent outline-none text-sm"
+          placeholder="your.email@student.upm.edu.my"
+          value={signupForm.email}
+          onChange={(e) =>
+            setSignupForm({ ...signupForm, email: e.target.value })
+          }
+        />
+      </div>
+      <FieldError msg={signupErrors.email} />
+    </div>
 
-              <Button type="submit" className="w-full h-14 rounded-2xl text-lg" disabled={!canSignup}>
-                Create Account
-              </Button>
-            </form>
-          )}
+    <div>
+      <label className="text-sm font-medium">Password</label>
+      <div
+        className={cn(
+          "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+          signupErrors.password && "border-destructive"
+        )}
+      >
+        <Lock className="h-5 w-5 text-muted-foreground" />
+        <input
+          type="password"
+          className="flex-1 bg-transparent outline-none text-sm"
+          placeholder="Minimum 6 characters"
+          value={signupForm.password}
+          onChange={(e) =>
+            setSignupForm({ ...signupForm, password: e.target.value })
+          }
+        />
+      </div>
+      <FieldError msg={signupErrors.password} />
+    </div>
+
+    <div>
+      <label className="text-sm font-medium">Confirm Password</label>
+      <div
+        className={cn(
+          "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+          signupErrors.confirmPassword && "border-destructive"
+        )}
+      >
+        <Lock className="h-5 w-5 text-muted-foreground" />
+        <input
+          type="password"
+          className="flex-1 bg-transparent outline-none text-sm"
+          placeholder="Re-enter password"
+          value={signupForm.confirmPassword}
+          onChange={(e) =>
+            setSignupForm({ ...signupForm, confirmPassword: e.target.value })
+          }
+        />
+      </div>
+      <FieldError msg={signupErrors.confirmPassword} />
+    </div>
+
+    <Button
+      type="submit"
+      className="w-full h-14 rounded-2xl text-lg"
+      disabled={!canSignup}
+    >
+      Create Account
+    </Button>
+
+    <p className="text-center text-sm text-muted-foreground">
+      After sign up, you’ll need to enter the verification code sent to your email.
+    </p>
+  </form>
+)
+}
         </div>
       </div>
     </Layout>
   );
 }
 
-function NotFound() {
+function NotFound({ authUser, onLogout }) {
   return (
-    <Layout>
+    <Layout authUser={authUser} onLogout={onLogout}>
       <EmptyState
         title="404 - Page Not Found"
         description="The page you requested doesn't exist."
@@ -2158,20 +2276,41 @@ function NotFound() {
  * =========================
  */
 export default function App() {
+  const [authUser, setAuthUser] = useState(null);
+
+  useEffect(() => {
+    getAuthUser().then(setAuthUser);
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut();
+    setAuthUser(null);
+  };
+
   return (
     <BrowserRouter>
       <div className="text-[15px]">
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/facilities" element={<Facilities />} />
-          <Route path="/facilities/:id" element={<FacilityDetails />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/feedback/:bookingId" element={<FeedbackForm />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+          <Route path="/" element={<Home authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/facilities" element={<Facilities authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/facilities/:id" element={<FacilityDetails authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/checkout" element={<Checkout authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/bookings" element={<Bookings authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/feedback/:bookingId" element={<FeedbackForm authUser={authUser} onLogout={handleLogout} />} />
+          <Route path="/admin" element={<Admin authUser={authUser} onLogout={handleLogout} />} />
+          <Route
+            path="/login"
+            element={
+              <Login
+                authUser={authUser}
+                onLogout={handleLogout}
+                onAuthed={() => getAuthUser().then(setAuthUser)}
+              />
+        }
+      />
+      <Route path="*" element={<NotFound authUser={authUser} onLogout={handleLogout} />} />
+    </Routes>
+
       </div>
     </BrowserRouter>
   );
