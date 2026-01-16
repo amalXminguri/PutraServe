@@ -52,7 +52,6 @@ async function getAuthUser() {
     return null;
   }
 }
-console.log("COGNITO USER POOL ID:", import.meta.env.VITE_COGNITO_USER_POOL_ID);
 
 
 /**
@@ -1992,18 +1991,40 @@ function Login() {
 
   const FieldError = ({ msg }) => (msg ? <p className="mt-2 text-sm text-destructive">{msg}</p> : null);
 
-  const onLogin = (e) => {
-    e.preventDefault();
-    if (!canLogin) return;
-    // demo
-    navigate("/facilities");
-  };
+  const onLogin = async (e) => {
+  e.preventDefault();
+  if (!canLogin) return;
 
-  const onSignup = (e) => {
-    e.preventDefault();
-    if (!canSignup) return;
+  try {
+    await signIn({
+      username: loginForm.email,
+      password: loginForm.password,
+    });
+
+    navigate("/facilities");
+  } catch (err) {
+    alert(err.message || "Login failed");
+  }
+};
+
+
+  const onSignup = async (e) => {
+  e.preventDefault();
+  if (!canSignup) return;
+
+  try {
+    await signUp({
+      username: signupForm.email,
+      password: signupForm.password,
+    });
+
+    alert("Signup successful! Please login.");
     setTab("login");
-  };
+  } catch (err) {
+    alert(err.message || "Signup failed");
+  }
+};
+
 
   return (
     <Layout showFooter={false}>
