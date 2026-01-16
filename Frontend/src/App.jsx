@@ -52,6 +52,9 @@ async function getAuthUser() {
     return null;
   }
 }
+console.log("COGNITO USER POOL ID:", import.meta.env.VITE_COGNITO_USER_POOL_ID);
+
+
 /**
  * =========================
  * Config
