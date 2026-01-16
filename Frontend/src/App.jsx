@@ -426,13 +426,23 @@ const facilitiesApi = {
   },
 
   async getById(facilityId) {
-    if (API_BASE) return apiFetch(`/facilities/${facilityId}`);
-    for (const v of DEMO_VENUES) {
-      const f = v.facilities.find((x) => x.id === facilityId);
+  if (API_BASE) {
+    // fetch venues then find facility inside them
+    const venues = await apiFetch(`/venues`);
+    for (const v of venues || []) {
+      const f = (v.facilities || []).find((x) => x.id === facilityId);
       if (f) return { ...f, venueName: v.name, venueId: v.id, location: v.location };
     }
     return null;
-  },
+  }
+
+  // demo fallback
+  for (const v of DEMO_VENUES) {
+    const f = v.facilities.find((x) => x.id === facilityId);
+    if (f) return { ...f, venueName: v.name, venueId: v.id, location: v.location };
+  }
+  return null;
+},
 
   async getTimeSlots(facilityId, dateStr) {
     if (API_BASE) return apiFetch(`/facilities/${facilityId}/timeslots?date=${encodeURIComponent(dateStr)}`);
@@ -953,20 +963,24 @@ function FacilityDetails({ authUser, onLogout }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const [f, fb] = await Promise.all([
-          facilitiesApi.getById(id),
-          facilitiesApi.getFeedbacks(id),
-        ]);
-        setFacility(f);
-        setFeedbacks(Array.isArray(fb) ? fb : []);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  (async () => {
+    setLoading(true);
+    try {
+      const [f, fb] = await Promise.all([
+        facilitiesApi.getById(id),
+        facilitiesApi.getFeedbacks(id),
+      ]);
+      setFacility(f);
+      setFeedbacks(Array.isArray(fb) ? fb : []);
+    } catch (e) {
+      console.warn("FacilityDetails load failed:", e);
+      setFacility(null);
+      setFeedbacks([]);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, [id]);
 
   useEffect(() => {
   (async () => {
@@ -2308,6 +2322,7 @@ export default function App() {
               />
         }
       />
+      
       <Route path="*" element={<NotFound authUser={authUser} onLogout={handleLogout} />} />
     </Routes>
 
