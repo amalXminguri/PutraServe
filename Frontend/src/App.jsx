@@ -238,12 +238,6 @@ function Layout({ children, showFooter = true, authUser, onLogout }) {
             <Link to="/bookings">
               <Button variant="ghost" size="sm">My Bookings</Button>
             </Link>
-            <Link to="/admin">
-              <Button variant="outline" size="sm">
-                <Wrench className="h-4 w-4" />
-                Admin
-              </Button>
-            </Link>
             {authUser ? (
               <>
                 <span className="text-sm text-muted-foreground hidden sm:inline">
@@ -402,7 +396,25 @@ async function apiFetch(path, opts = {}) {
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
+let _venuesCache = null;
 
+async function getVenuesCached() {
+  if (!API_BASE) return DEMO_VENUES;
+  if (_venuesCache) return _venuesCache;
+  const venues = await apiFetch(`/venues`);
+  _venuesCache = Array.isArray(venues) ? venues : [];
+  return _venuesCache;
+}
+
+function flattenVenuesToFacilityMap(venues) {
+  const map = new Map();
+  for (const v of venues || []) {
+    for (const f of v.facilities || []) {
+      map.set(f.id, { ...f, venueName: v.name, venueId: v.id, location: v.location });
+    }
+  }
+  return map;
+}
 
 const facilitiesApi = {
   async getVenues({ search = "", category = "all" } = {}) {
@@ -470,13 +482,8 @@ const facilitiesApi = {
 
 const bookingsApi = {
   async create(payload) {
-    if (API_BASE) {
-      const b = await apiFetch(`/bookings`, { method: "POST", body: JSON.stringify(payload) });
-      // normalize
-      return { ...b, id: b.bookingId ?? b.id };
-    }
+    if (API_BASE) return apiFetch(`/bookings`, { method: "POST", body: JSON.stringify(payload) });
 
-    // demo localStorage
     const existing = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
     const booking = {
       id: `b-${Date.now()}`,
@@ -490,27 +497,39 @@ const bookingsApi = {
 
   async getAll(userId) {
     if (API_BASE) {
-      const items = await apiFetch(`/bookings?userId=${encodeURIComponent(userId)}`);
-      return (items || []).map((b) => ({
+      const raw = await apiFetch(`/bookings?userId=${encodeURIComponent(userId)}`);
+
+      const venues = await getVenuesCached();
+      const map = flattenVenuesToFacilityMap(venues);
+
+      return (raw || []).map((b) => ({
         ...b,
-        id: b.bookingId ?? b.id, // normalize
-        facility: b.facility || findFacilityForBooking(b),
+        id: b.id || b.bookingId,            // normalize
+        timeSlot: b.timeSlot || b.slot,
+        facility: map.get(b.facilityId) || null,
       }));
     }
 
     const all = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
-    return all
-      .filter((b) => b.userId === userId)
-      .map((b) => ({
-        ...b,
-        facility: findFacilityForBooking(b),
-      }));
+    return all.filter((b) => b.userId === userId).map((b) => ({
+      ...b,
+      facility: findFacilityForBooking(b),
+    }));
   },
 
   async getById(bookingId) {
     if (API_BASE) {
       const b = await apiFetch(`/bookings/${bookingId}`);
-      return { ...b, id: b.bookingId ?? b.id }; // normalize
+
+      const venues = await getVenuesCached();
+      const map = flattenVenuesToFacilityMap(venues);
+
+      return {
+        ...b,
+        id: b.id || b.bookingId,
+        timeSlot: b.timeSlot || b.slot,
+        facility: map.get(b.facilityId) || null,
+      };
     }
 
     const all = JSON.parse(localStorage.getItem("ps_bookings") || "[]");
@@ -566,11 +585,24 @@ function Home({ authUser, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    // show “featured” = first 4 facilities in demo
-    const list = [];
-    for (const v of DEMO_VENUES) for (const f of v.facilities) list.push({ ...f, venueName: v.name, location: v.location });
-    setFeatured(list.slice(0, 4));
-  }, []);
+  (async () => {
+    try {
+      const venues = await facilitiesApi.getVenues();
+      const list = [];
+      for (const v of venues || []) {
+        for (const f of v.facilities || []) {
+          list.push({ ...f, venueName: v.name, location: v.location });
+        }
+      }
+      setFeatured(list.slice(0, 4));
+    } catch {
+      // fallback
+      const list = [];
+      for (const v of DEMO_VENUES) for (const f of v.facilities) list.push({ ...f, venueName: v.name, location: v.location });
+      setFeatured(list.slice(0, 4));
+    }
+  })();
+}, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -958,41 +990,37 @@ function FacilityDetails({ authUser, onLogout }) {
   const [facility, setFacility] = useState(null);
   const [slots, setSlots] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [selectedSlotKey, setSelectedSlotKey] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  (async () => {
-    setLoading(true);
-    try {
-      const [f, fb] = await Promise.all([
-        facilitiesApi.getById(id),
-        facilitiesApi.getFeedbacks(id),
-      ]);
-      setFacility(f);
-      setFeedbacks(Array.isArray(fb) ? fb : []);
-    } catch (e) {
-      console.warn("FacilityDetails load failed:", e);
-      setFacility(null);
-      setFeedbacks([]);
-    } finally {
-      setLoading(false);
-    }
-  })();
-}, [id]);
+    (async () => {
+      setLoading(true);
+      try {
+        const [f, fb] = await Promise.all([
+          facilitiesApi.getById(id),
+          facilitiesApi.getFeedbacks(id),
+        ]);
+        setFacility(f);
+        setFeedbacks(Array.isArray(fb) ? fb : []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
 
   useEffect(() => {
-  (async () => {
-    const s = await facilitiesApi.getTimeSlots(id, selectedDate);
-    setSlots(Array.isArray(s) ? s : []);
-    setSelectedSlotKey(null);
-  })();
-}, [id, selectedDate]);
-
+    (async () => {
+      const s = await facilitiesApi.getTimeSlots(id, selectedDate);
+      setSlots(Array.isArray(s) ? s : []);
+      setSelectedSlotKey(null);
+    })();
+  }, [id, selectedDate]);
 
   const selectedSlot = slots.find((s) => (s.id ?? s.time) === selectedSlotKey);
-
 
   const bookNow = () => {
     if (!facility || !selectedSlot) return;
@@ -1004,183 +1032,36 @@ function FacilityDetails({ authUser, onLogout }) {
     navigate(`/checkout?${params.toString()}`);
   };
 
-  if (loading) {
-    return (
-      <Layout authUser={authUser} onLogout={onLogout}>
-        <div className="container mx-auto px-4 py-10">
-          <div className="h-8 w-52 bg-muted rounded mb-6 animate-pulse" />
-          <div className="h-72 bg-muted rounded-2xl animate-pulse" />
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!facility) {
-    return (
-      <Layout authUser={authUser} onLogout={onLogout}>
-        <EmptyState
-          title="Facility Not Found"
-          description="The facility you’re looking for doesn’t exist."
-          icon={<Info className="h-6 w-6 text-muted-foreground" />}
-          action={<Link to="/facilities"><Button>Browse Facilities</Button></Link>}
-        />
-      </Layout>
-    );
-  }
+  // ...keep the rest of your JSX, BUT fix the slot button like this:
+  // onClick={() => setSelectedSlotKey(s.id ?? s.time)}
+  // and compare with selectedSlotKey
 
   return (
-    <Layout authUser={authUser} onLogout={onLogout}>
-      <div className="container mx-auto px-4 py-6">
-        <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate(-1)}>
-          <ChevronLeft className="h-4 w-4" /> Back
-        </Button>
+    // keep your existing return JSX
+    // just ensure slot buttons use selectedSlotKey like below:
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* main */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="relative aspect-video bg-muted rounded-2xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-                <span className="text-8xl font-bold text-primary/20">
-                  {facility.name?.charAt(0)}
-                </span>
-              </div>
-              <Badge className="absolute top-4 left-4" variant="primary">
-                {CATEGORY_LABELS[facility.category] || facility.category}
-              </Badge>
-            </div>
-
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold mb-2">{facility.name}</h1>
-
-              <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{facility.location || "UPM"}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-warning text-warning" />
-                  <span className="font-medium text-foreground">{facility.ratingAvg}</span>
-                  <span>({facility.totalReviews} reviews)</span>
-                </div>
-              </div>
-
-              <p className="mt-4 text-muted-foreground">{facility.description}</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-card rounded-xl border border-border p-4">
-                <Users className="h-5 w-5 text-primary mb-2" />
-                <div className="text-sm text-muted-foreground">Capacity</div>
-                <div className="font-semibold">{facility.capacity} people</div>
-              </div>
-
-              <div className="bg-card rounded-xl border border-border p-4">
-                <Clock className="h-5 w-5 text-primary mb-2" />
-                <div className="text-sm text-muted-foreground">Operating Hours</div>
-                <div className="font-semibold">{facility.openingHours}</div>
-              </div>
-
-              <div className="bg-card rounded-xl border border-border p-4">
-                <Info className="h-5 w-5 text-primary mb-2" />
-                <div className="text-sm text-muted-foreground">Price</div>
-                <div className="font-semibold">
-                  {facility.price === 0 ? "Free" : `RM ${facility.price}/hour`}
-                </div>
-              </div>
-            </div>
-
-            {Array.isArray(feedbacks) && feedbacks.length > 0 ? (
-              <div className="bg-card rounded-xl border border-border p-6">
-                <h3 className="font-semibold mb-4">Recent Feedback</h3>
-                <div className="space-y-4">
-                  {feedbacks.slice(0, 3).map((fb) => (
-                    <div key={fb.id} className="pb-4 border-b border-border last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-sm">{fb.userName}</span>
-                        <RatingStars rating={fb.rating} size="sm" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">{fb.comment}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {/* booking sidebar */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24 bg-card rounded-2xl border border-border p-6 space-y-6">
-              <div>
-                <h3 className="font-semibold mb-1">Book This Facility</h3>
-                <p className="text-sm text-muted-foreground">Select a date and time slot</p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Select Date</label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Available Slots</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {slots.map((s) => {
-                    const key = s.id ?? s.time;
-                    const isSelected = selectedSlotKey === key;
-                    const disabled = s.available === false;
-
-                    return (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => setSelectedSlotKey(key)}
-                      className={cn(
-                        "p-3 rounded-xl border text-sm transition text-left",
-                        disabled && "opacity-50 cursor-not-allowed",
-                        isSelected
-                          ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                          : "border-border hover:border-primary/50"
-                    )}
-                    >
-                      <div className="font-medium">{s.time}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {s.available ? "Available" : "Full"}
-                      </div>
-                    </button>
-                  );
-                })}
-                </div>
-              </div>
-
-              {selectedSlot ? (
-                <div className="bg-muted rounded-xl p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>1 hour slot</span>
-                    <span>{facility.price === 0 ? "Free" : `RM ${facility.price}`}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span className="text-primary">{facility.price === 0 ? "Free" : `RM ${facility.price}`}</span>
-                  </div>
-                </div>
-              ) : null}
-
-              <Button
-                className="w-full h-12 rounded-2xl"
-                disabled={!selectedSlot}
-                onClick={bookNow}
-              >
-                <Check className="h-4 w-4" /> Book Now
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Layout>
+    // {slots.map((s) => {
+    //   const key = s.id ?? s.time;
+    //   return (
+    //     <button
+    //       key={key}
+    //       type="button"
+    //       onClick={() => setSelectedSlotKey(key)}
+    //       className={cn(
+    //         "p-3 rounded-xl border text-sm transition text-left",
+    //         selectedSlotKey === key
+    //           ? "border-primary bg-primary/5"
+    //           : "border-border hover:border-primary/50"
+    //       )}
+    //     >
+    //       <div className="font-medium">{s.time}</div>
+    //       <div className="text-xs text-muted-foreground">
+    //         {s.available ? "Available" : "Full"}
+    //       </div>
+    //     </button>
+    //   );
+    // })}
+    <></>
   );
 }
 
@@ -1435,30 +1316,61 @@ setBookings(updated);
 }
 
 function BookingCard({ booking }) {
-  const facilityName = booking?.facility?.name || "Facility";
-  const venueName = booking?.facility?.venueName || "UPM";
-  const canGiveFeedback = booking.status === "completed" || booking.status === "upcoming";
+  const bookingId = booking.bookingId || booking.id;
+
+  const facilityName =
+    booking?.facility?.name ||
+    booking?.facilityName ||
+    booking?.facilityId ||
+    "Facility";
+
+  const venueName =
+    booking?.facility?.venueName ||
+    booking?.venueName ||
+    booking?.venue ||
+    "UPM";
+
+  const isCompleted = booking.status === "completed";
+
+  // frontend flag OR backend field (only works if backend sets one of these)
+  const feedbackSubmitted =
+    Boolean(booking.feedbackSubmitted) ||
+    Boolean(booking.hasFeedback) ||
+    Boolean(booking.feedbackId);
+
+  const canGiveFeedback = isCompleted && !feedbackSubmitted;
+  const canEditFeedback = isCompleted && feedbackSubmitted;
 
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="font-semibold truncate">{facilityName}</div>
+
           <div className="text-sm text-muted-foreground mt-1">
             {venueName} • {booking.date} • {booking.timeSlot}
           </div>
+
           <div className="mt-3 flex gap-2 flex-wrap">
             <Badge variant="outline">{booking.status}</Badge>
-            <Badge variant="secondary">
-              {booking.totalPrice === 0 ? "Free" : `RM ${booking.totalPrice}`}
-            </Badge>
+            <Badge variant="secondary">Free</Badge>
+
+            {feedbackSubmitted ? (
+              <Badge variant="primary">Feedback Submitted</Badge>
+            ) : null}
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
           {canGiveFeedback ? (
-            <Link to={`/feedback/${booking.id}`}>
+            <Link to={`/feedback/${bookingId}`}>
               <Button size="sm">Give Feedback</Button>
+            </Link>
+          ) : canEditFeedback ? (
+            <Link to={`/feedback/${bookingId}?mode=edit`}>
+              <Button size="sm" variant="outline">
+                Edit Feedback
+              </Button>
             </Link>
           ) : (
             <Button size="sm" variant="outline" disabled>
