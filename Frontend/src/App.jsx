@@ -38,6 +38,8 @@ import {
   getCurrentUser,
   fetchUserAttributes,
 } from "aws-amplify/auth";
+import { Eye, EyeOff } from "lucide-react";
+
 
 async function getAuthUser() {
   try {
@@ -543,12 +545,10 @@ const feedbackApi = {
   async create(payload) {
     if (API_BASE) return apiFetch(`/feedback`, { method: "POST", body: JSON.stringify(payload) });
 
-    // demo localStorage
     const existing = JSON.parse(localStorage.getItem("ps_feedback") || "[]");
     const item = { id: `fb-${Date.now()}`, createdAt: new Date().toISOString(), ...payload };
     localStorage.setItem("ps_feedback", JSON.stringify([item, ...existing]));
 
-    // if maintenance issue, also push a "ticket"
     if (payload.hasIssue && payload.issueDetails) {
       const tickets = JSON.parse(localStorage.getItem("ps_tickets") || "[]");
       const booking = await bookingsApi.getById(payload.bookingId);
@@ -564,13 +564,62 @@ const feedbackApi = {
 
     return item;
   },
+
+  async getByBookingId(bookingId) {
+    if (API_BASE) return apiFetch(`/feedback/by-booking/${encodeURIComponent(bookingId)}`);
+
+    const all = JSON.parse(localStorage.getItem("ps_feedback") || "[]");
+    return all.find((x) => x.bookingId === bookingId) || null;
+  },
+
+  async update(feedbackId, payload) {
+    if (API_BASE) return apiFetch(`/feedback/${encodeURIComponent(feedbackId)}`, { method: "PUT", body: JSON.stringify(payload) });
+
+    const all = JSON.parse(localStorage.getItem("ps_feedback") || "[]");
+    const idx = all.findIndex((x) => x.id === feedbackId);
+    if (idx === -1) throw new Error("Feedback not found");
+
+    const next = { ...all[idx], ...payload, updatedAt: new Date().toISOString() };
+    all[idx] = next;
+    localStorage.setItem("ps_feedback", JSON.stringify(all));
+    return next;
+  },
 };
 
-function findFacilityForBooking(b) {
-  for (const v of DEMO_VENUES) {
-    const f = v.facilities.find((x) => x.id === b.facilityId);
-    if (f) return { ...f, location: v.location, venueName: v.name };
+async function findFacilityForBooking(b) {
+  // ✅ If backend exists, fetch real venues
+  if (API_BASE) {
+    try {
+      const venues = await apiFetch(`/venues`);
+      for (const v of venues || []) {
+        const f = (v.facilities || []).find(x => x.id === b.facilityId);
+        if (f) {
+          return {
+            ...f,
+            venueName: v.name,
+            venueId: v.id,
+            location: v.location,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("findFacilityForBooking API failed:", e);
+    }
   }
+
+  // ✅ Fallback to DEMO_VENUES (offline mode)
+  for (const v of DEMO_VENUES) {
+    const f = v.facilities.find(x => x.id === b.facilityId);
+    if (f) {
+      return {
+        ...f,
+        venueName: v.name,
+        venueId: v.id,
+        location: v.location,
+      };
+    }
+  }
+
   return null;
 }
 
@@ -2052,6 +2101,9 @@ function Login({ onAuthed, authUser, onLogout }) {
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [confirmCode, setConfirmCode] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -2219,24 +2271,40 @@ const onConfirmSignup = async (e) => {
     </div>
 
     <div>
-      <label className="text-sm font-medium">Password</label>
-      <div className={cn(
-        "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
-        loginErrors.password && "border-destructive"
-      )}>
-        <Lock className="h-5 w-5 text-muted-foreground" />
-        <input
-          type="password"
-          className="flex-1 bg-transparent outline-none text-sm"
-          placeholder="••••••••"
-          value={loginForm.password}
-          onChange={(e) =>
-            setLoginForm({ ...loginForm, password: e.target.value })
-          }
-        />
-      </div>
-      <FieldError msg={loginErrors.password} />
-    </div>
+  <label className="text-sm font-medium">Password</label>
+  <div
+    className={cn(
+      "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
+      loginErrors.password && "border-destructive"
+    )}
+  >
+    <Lock className="h-5 w-5 text-muted-foreground" />
+
+    <input
+      type={showLoginPassword ? "text" : "password"}
+      className="flex-1 bg-transparent outline-none text-sm"
+      placeholder="••••••••"
+      value={loginForm.password}
+      onChange={(e) =>
+        setLoginForm({ ...loginForm, password: e.target.value })
+      }
+    />
+
+    <button
+      type="button"
+      onClick={() => setShowLoginPassword((v) => !v)}
+      className="p-1 rounded-md hover:bg-muted"
+      aria-label={showLoginPassword ? "Hide password" : "Show password"}
+    >
+      {showLoginPassword ? (
+        <EyeOff className="h-5 w-5 text-muted-foreground" />
+      ) : (
+        <Eye className="h-5 w-5 text-muted-foreground" />
+      )}
+    </button>
+  </div>
+  <FieldError msg={loginErrors.password} />
+</div>
 
     <Button
       type="submit"
@@ -2279,18 +2347,32 @@ const onConfirmSignup = async (e) => {
         )}
       >
         <Lock className="h-5 w-5 text-muted-foreground" />
-        <input
-          type="password"
-          className="flex-1 bg-transparent outline-none text-sm"
-          placeholder="Minimum 6 characters"
-          value={signupForm.password}
-          onChange={(e) =>
-            setSignupForm({ ...signupForm, password: e.target.value })
-          }
-        />
-      </div>
-      <FieldError msg={signupErrors.password} />
-    </div>
+
+      <input
+        type={showSignupPassword ? "text" : "password"}
+        className="flex-1 bg-transparent outline-none text-sm"
+        placeholder="Minimum 6 characters"
+        value={signupForm.password}
+        onChange={(e) =>
+          setSignupForm({ ...signupForm, password: e.target.value })
+      }
+    />
+
+    <button
+      type="button"
+      onClick={() => setShowSignupPassword((v) => !v)}
+      className="p-1 rounded-md hover:bg-muted"
+      aria-label={showSignupPassword ? "Hide password" : "Show password"}
+    >
+      {showSignupPassword ? (
+        <EyeOff className="h-5 w-5 text-muted-foreground" />
+      ) : (
+        <Eye className="h-5 w-5 text-muted-foreground" />
+      )}
+    </button>
+  </div>
+  <FieldError msg={signupErrors.password} />
+</div>
 
     <div>
       <label className="text-sm font-medium">Confirm Password</label>
@@ -2298,21 +2380,35 @@ const onConfirmSignup = async (e) => {
         className={cn(
           "mt-2 flex items-center gap-2 rounded-xl border border-border px-3 h-12",
           signupErrors.confirmPassword && "border-destructive"
-        )}
-      >
-        <Lock className="h-5 w-5 text-muted-foreground" />
-        <input
-          type="password"
-          className="flex-1 bg-transparent outline-none text-sm"
-          placeholder="Re-enter password"
-          value={signupForm.confirmPassword}
-          onChange={(e) =>
-            setSignupForm({ ...signupForm, confirmPassword: e.target.value })
-          }
-        />
-      </div>
-      <FieldError msg={signupErrors.confirmPassword} />
-    </div>
+    )}
+  >
+    <Lock className="h-5 w-5 text-muted-foreground" />
+
+    <input
+      type={showSignupConfirmPassword ? "text" : "password"}
+      className="flex-1 bg-transparent outline-none text-sm"
+      placeholder="Re-enter password"
+      value={signupForm.confirmPassword}
+      onChange={(e) =>
+        setSignupForm({ ...signupForm, confirmPassword: e.target.value })
+      }
+    />
+
+    <button
+      type="button"
+      onClick={() => setShowSignupConfirmPassword((v) => !v)}
+      className="p-1 rounded-md hover:bg-muted"
+      aria-label={showSignupConfirmPassword ? "Hide password" : "Show password"}
+    >
+      {showSignupConfirmPassword ? (
+        <EyeOff className="h-5 w-5 text-muted-foreground" />
+      ) : (
+        <Eye className="h-5 w-5 text-muted-foreground" />
+      )}
+    </button>
+  </div>
+  <FieldError msg={signupErrors.confirmPassword} />
+</div>
 
     <Button
       type="submit"
