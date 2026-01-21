@@ -790,7 +790,10 @@ function Home({ authUser, onLogout }) {
 }
 
 function FacilityCard({ facility }) {
-  const imgSrc = facility.imageUrl; // backend returns this
+  const imgSrc = facility.imageUrl; // from backend
+  const [imgError, setImgError] = React.useState(false);
+
+  const showFallback = !imgSrc || imgError;
 
   return (
     <Link
@@ -798,26 +801,27 @@ function FacilityCard({ facility }) {
       className="group bg-card rounded-2xl border border-border overflow-hidden hover:shadow-md transition"
     >
       <div className="relative aspect-video bg-muted overflow-hidden">
-        {imgSrc ? (
+        {/* IMAGE */}
+        {imgSrc && !imgError && (
           <img
             src={imgSrc}
             alt={facility.name}
             className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
-            onError={(e) => {
-              // fallback if image fails
-              e.currentTarget.style.display = "none";
-            }}
+            onError={() => setImgError(true)}
           />
-        ) : null}
+        )}
 
-        {/* overlay + fallback letter (shows if no image OR image fails) */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/25 to-primary/5 flex items-center justify-center">
-          <span className="text-7xl font-bold text-primary/20">
-            {facility?.name?.charAt(0) || "F"}
-          </span>
-        </div>
+        {/* FALLBACK (ONLY when image missing or fails) */}
+        {showFallback && (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/25 to-primary/5 flex items-center justify-center">
+            <span className="text-7xl font-bold text-primary/20">
+              {facility?.name?.charAt(0) || "F"}
+            </span>
+          </div>
+        )}
 
+        {/* CATEGORY BADGE */}
         <Badge className="absolute top-4 left-4" variant="primary">
           {CATEGORY_LABELS[facility.category] || facility.category}
         </Badge>
@@ -838,8 +842,10 @@ function FacilityCard({ facility }) {
         <div className="flex items-center justify-between mt-4">
           <div className="flex items-center gap-1 text-sm">
             <Star className="h-4 w-4 text-warning fill-warning" />
-            <span className="font-medium">{facility.ratingAvg ?? 4.5}</span>
-            <span className="text-muted-foreground">({facility.totalReviews ?? 0})</span>
+            <span className="font-medium">{facility.ratingAvg ?? 0}</span>
+            <span className="text-muted-foreground">
+              ({facility.totalReviews ?? 0})
+            </span>
           </div>
 
           <div className="text-sm font-semibold text-primary">
@@ -1057,14 +1063,18 @@ function VenueBlock({ venue }) {
 function FacilityDetails({ authUser, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [facility, setFacility] = useState(null);
   const [slots, setSlots] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(() =>
-    new Date().toISOString().slice(0, 10)
+  const [selectedDate, setSelectedDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
   );
   const [selectedSlotKey, setSelectedSlotKey] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // 🔑 controls fallback letter
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -1153,29 +1163,25 @@ function FacilityDetails({ authUser, onLogout }) {
         </Button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* main */}
+          {/* ================= MAIN ================= */}
           <div className="lg:col-span-2 space-y-6">
-            {/* ✅ IMAGE HERO */}
+            {/* ===== IMAGE HERO ===== */}
             <div className="relative aspect-video bg-muted rounded-2xl overflow-hidden">
-              {imgSrc ? (
+              {imgSrc && !imgError ? (
                 <img
                   src={imgSrc}
                   alt={facility.name}
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="lazy"
-                  onError={(e) => {
-                    // if image fails, hide it so the placeholder letter shows
-                    e.currentTarget.style.display = "none";
-                  }}
+                  onError={() => setImgError(true)}
                 />
-              ) : null}
-
-              {/* overlay + placeholder */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-                <span className="text-8xl font-bold text-primary/20">
-                  {facility.name?.charAt(0)}
-                </span>
-              </div>
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
+                  <span className="text-8xl font-bold text-primary/20">
+                    {facility.name?.charAt(0) || "F"}
+                  </span>
+                </div>
+              )}
 
               <Badge className="absolute top-4 left-4" variant="primary">
                 {CATEGORY_LABELS[facility.category] || facility.category}
@@ -1183,131 +1189,97 @@ function FacilityDetails({ authUser, onLogout }) {
             </div>
 
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold mb-2">{facility.name}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold mb-2">
+                {facility.name}
+              </h1>
 
               <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" />
                   <span>
-                    {facility.venueName || "UPM"} • {facility.location || "UPM Serdang"}
+                    {facility.venueName || "UPM"} •{" "}
+                    {facility.location || "UPM Serdang"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-warning text-warning" />
                   <span className="font-medium text-foreground">
-                    {facility.ratingAvg ?? 4.5}
+                    {facility.ratingAvg ?? 0}
                   </span>
                   <span>({facility.totalReviews ?? 0} reviews)</span>
                 </div>
               </div>
-
-              <p className="mt-4 text-muted-foreground">{facility.description}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-card rounded-xl border border-border p-4">
                 <Users className="h-5 w-5 text-primary mb-2" />
                 <div className="text-sm text-muted-foreground">Capacity</div>
-                <div className="font-semibold">{facility.capacity} people</div>
+                <div className="font-semibold">
+                  {facility.capacity} people
+                </div>
               </div>
 
               <div className="bg-card rounded-xl border border-border p-4">
                 <Clock className="h-5 w-5 text-primary mb-2" />
-                <div className="text-sm text-muted-foreground">Operating Hours</div>
-                <div className="font-semibold">{facility.openingHours || "—"}</div>
+                <div className="text-sm text-muted-foreground">
+                  Operating Hours
+                </div>
+                <div className="font-semibold">
+                  {facility.openingHours || "—"}
+                </div>
               </div>
 
               <div className="bg-card rounded-xl border border-border p-4">
                 <Info className="h-5 w-5 text-primary mb-2" />
                 <div className="text-sm text-muted-foreground">Price</div>
                 <div className="font-semibold">
-                  {facility.price === 0 ? "Free" : `RM ${facility.price}/hr`}
+                  {facility.price === 0
+                    ? "Free"
+                    : `RM ${facility.price}/hr`}
                 </div>
               </div>
             </div>
-
-            {Array.isArray(feedbacks) && feedbacks.length > 0 ? (
-              <div className="bg-card rounded-xl border border-border p-6">
-                <h3 className="font-semibold mb-4">Recent Feedback</h3>
-                <div className="space-y-4">
-                  {feedbacks.slice(0, 3).map((fb) => (
-                    <div
-                      key={fb.id || fb.feedbackId}
-                      className="pb-4 border-b border-border last:border-0 last:pb-0"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-sm">{fb.userName || "User"}</span>
-                        <RatingStars rating={fb.rating} size="sm" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">{fb.comment}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
 
-          {/* booking sidebar */}
+          {/* ================= BOOKING SIDEBAR ================= */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 bg-card rounded-2xl border border-border p-6 space-y-6">
               <div>
                 <h3 className="font-semibold mb-1">Book This Facility</h3>
-                <p className="text-sm text-muted-foreground">Select a date and time slot</p>
+                <p className="text-sm text-muted-foreground">
+                  Select a date and time slot
+                </p>
               </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">Select Date</label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                {slots.map((s) => {
+                  const key = s.id ?? s.time;
+                  const isSelected = selectedSlotKey === key;
+
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSelectedSlotKey(key)}
+                      className={cn(
+                        "p-3 rounded-xl border text-sm text-left",
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div className="font-medium">{s.time}</div>
+                    </button>
+                  );
+                })}
               </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Available Slots</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {slots.map((s) => {
-                    const key = s.id ?? s.time;
-                    const isSelected = selectedSlotKey === key;
-                    const disabled = s.available === false;
-
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => setSelectedSlotKey(key)}
-                        className={cn(
-                          "p-3 rounded-xl border text-sm transition text-left",
-                          disabled && "opacity-50 cursor-not-allowed",
-                          isSelected
-                            ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                            : "border-border hover:border-primary/50"
-                        )}
-                      >
-                        <div className="font-medium">{s.time}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {s.available ? "Available" : "Full"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {selectedSlot ? (
-                <div className="bg-muted rounded-xl p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>1 hour slot</span>
-                    <span>{facility.price === 0 ? "Free" : `RM ${facility.price}/hr`}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span className="text-primary">{facility.price === 0 ? "Free" : `RM ${facility.price}`}</span>
-                  </div>
-                </div>
-              ) : null}
 
               <Button
                 className="w-full h-12 rounded-2xl"
