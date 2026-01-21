@@ -1073,7 +1073,7 @@ function FacilityDetails({ authUser, onLogout }) {
   const [selectedSlotKey, setSelectedSlotKey] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔑 controls fallback letter
+  // controls placeholder vs real image
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
@@ -1163,9 +1163,9 @@ function FacilityDetails({ authUser, onLogout }) {
         </Button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* ================= MAIN ================= */}
+          {/* main */}
           <div className="lg:col-span-2 space-y-6">
-            {/* ===== IMAGE HERO ===== */}
+            {/* IMAGE HERO */}
             <div className="relative aspect-video bg-muted rounded-2xl overflow-hidden">
               {imgSrc && !imgError ? (
                 <img
@@ -1201,6 +1201,7 @@ function FacilityDetails({ authUser, onLogout }) {
                     {facility.location || "UPM Serdang"}
                   </span>
                 </div>
+
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-warning text-warning" />
                   <span className="font-medium text-foreground">
@@ -1209,47 +1210,70 @@ function FacilityDetails({ authUser, onLogout }) {
                   <span>({facility.totalReviews ?? 0} reviews)</span>
                 </div>
               </div>
+
+              {facility.description ? (
+                <p className="mt-4 text-muted-foreground">{facility.description}</p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-card rounded-xl border border-border p-4">
                 <Users className="h-5 w-5 text-primary mb-2" />
                 <div className="text-sm text-muted-foreground">Capacity</div>
-                <div className="font-semibold">
-                  {facility.capacity} people
-                </div>
+                <div className="font-semibold">{facility.capacity} people</div>
               </div>
 
               <div className="bg-card rounded-xl border border-border p-4">
                 <Clock className="h-5 w-5 text-primary mb-2" />
-                <div className="text-sm text-muted-foreground">
-                  Operating Hours
-                </div>
-                <div className="font-semibold">
-                  {facility.openingHours || "—"}
-                </div>
+                <div className="text-sm text-muted-foreground">Operating Hours</div>
+                <div className="font-semibold">{facility.openingHours || "—"}</div>
               </div>
 
               <div className="bg-card rounded-xl border border-border p-4">
                 <Info className="h-5 w-5 text-primary mb-2" />
                 <div className="text-sm text-muted-foreground">Price</div>
                 <div className="font-semibold">
-                  {facility.price === 0
-                    ? "Free"
-                    : `RM ${facility.price}/hr`}
+                  {facility.price === 0 ? "Free" : `RM ${facility.price}/hr`}
                 </div>
               </div>
             </div>
+
+            {/* ✅ RECENT FEEDBACK RESTORED */}
+            {Array.isArray(feedbacks) && feedbacks.length > 0 ? (
+              <div className="bg-card rounded-xl border border-border p-6">
+                <h3 className="font-semibold mb-4">Recent Feedback</h3>
+                <div className="space-y-4">
+                  {feedbacks.slice(0, 3).map((fb) => (
+                    <div
+                      key={fb.id || fb.feedbackId || fb.createdAt}
+                      className="pb-4 border-b border-border last:border-0 last:pb-0"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-sm">
+                          {fb.userName || "User"}
+                        </span>
+                        <RatingStars rating={fb.rating || 0} size="sm" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {fb.comment || ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-card rounded-xl border border-border p-6 text-sm text-muted-foreground">
+                No feedback yet.
+              </div>
+            )}
           </div>
 
-          {/* ================= BOOKING SIDEBAR ================= */}
+          {/* booking sidebar */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 bg-card rounded-2xl border border-border p-6 space-y-6">
               <div>
                 <h3 className="font-semibold mb-1">Book This Facility</h3>
-                <p className="text-sm text-muted-foreground">
-                  Select a date and time slot
-                </p>
+                <p className="text-sm text-muted-foreground">Select a date and time slot</p>
               </div>
 
               <Input
@@ -1258,27 +1282,36 @@ function FacilityDetails({ authUser, onLogout }) {
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
 
-              <div className="grid grid-cols-2 gap-2">
-                {slots.map((s) => {
-                  const key = s.id ?? s.time;
-                  const isSelected = selectedSlotKey === key;
+              <div>
+                <label className="text-sm font-medium mb-2 block">Available Slots</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {slots.map((s) => {
+                    const key = s.id ?? s.time;
+                    const isSelected = selectedSlotKey === key;
+                    const disabled = s.available === false;
 
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSelectedSlotKey(key)}
-                      className={cn(
-                        "p-3 rounded-xl border text-sm text-left",
-                        isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-primary/50"
-                      )}
-                    >
-                      <div className="font-medium">{s.time}</div>
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setSelectedSlotKey(key)}
+                        className={cn(
+                          "p-3 rounded-xl border text-sm transition text-left",
+                          disabled && "opacity-50 cursor-not-allowed",
+                          isSelected
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <div className="font-medium">{s.time}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.available ? "Available" : "Full"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <Button
