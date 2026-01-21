@@ -4,6 +4,7 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: ap-southeast-1
+  stage: dev
 
   environment:
     T_BOOKINGS: PutraServeBookings
@@ -11,11 +12,14 @@ provider:
     T_TICKETS: PutraServeTickets
     T_FACILITIES: PutraServeFacilities
 
-  # ✅ ADD THIS (Lambda permissions for DynamoDB)
+    # ✅ Public S3 base URL (used by facilities.js resolveImageUrl)
+    # Format: https://<bucket>.s3.<region>.amazonaws.com
+    ASSET_BASE: https://putraserve-assets-akmal.s3.ap-southeast-1.amazonaws.com
+
   iam:
     role:
       statements:
-        # Facilities (for /venues, /facilities/{id})
+        # ✅ FACILITIES table
         - Effect: Allow
           Action:
             - dynamodb:Scan
@@ -24,18 +28,19 @@ provider:
           Resource:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_FACILITIES}
 
-        # Bookings (create, list, get, update)
+        # ✅ BOOKINGS table + indexes
         - Effect: Allow
           Action:
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:UpdateItem
             - dynamodb:Query
+            - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_BOOKINGS}
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_BOOKINGS}/index/*
 
-        # Feedback
+        # ✅ FEEDBACK table + indexes
         - Effect: Allow
           Action:
             - dynamodb:PutItem
@@ -46,15 +51,17 @@ provider:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_FEEDBACK}
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_FEEDBACK}/index/*
 
-        # Tickets (admin)
+        # ✅ TICKETS table
         - Effect: Allow
           Action:
             - dynamodb:PutItem
             - dynamodb:GetItem
             - dynamodb:UpdateItem
+            - dynamodb:Query
             - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_TICKETS}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.T_TICKETS}/index/*
 
 functions:
   createBooking:
@@ -156,3 +163,5 @@ plugins:
 custom:
   serverless-offline:
     disableCookieValidation: true
+    noPrependStageInUrl: true
+    corsAllowCredentials: false
